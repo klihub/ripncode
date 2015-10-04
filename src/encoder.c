@@ -38,7 +38,6 @@ int rnc_encoder_init(rnc_t *rnc)
 {
     rnc_enc_api_t   *api;
     mrp_list_hook_t *p, *n;
-    rnc_format_t    *f;
     int              i;
 
     mrp_list_init(&rnc->encoders);
@@ -47,15 +46,9 @@ int rnc_encoder_init(rnc_t *rnc)
     mrp_list_foreach(&rnc->encoders, p, n) {
         api = mrp_list_entry(p, typeof(*api), hook);
 
-        /* XXX hack/kludge */
         for (i = 0; api->types[i] != NULL; i++) {
-            f = mrp_allocz(sizeof(*f));
-
-            if (f == NULL)
+            if (rnc_compress_register(rnc, api->types[i]) < 0)
                 return -1;
-
-            f->name = api->types[i];
-            rnc_format_register(rnc, f);
         }
     }
 
@@ -65,8 +58,7 @@ int rnc_encoder_init(rnc_t *rnc)
 
 int rnc_encoder_register(rnc_t *rnc, const char *name, rnc_enc_api_t *api)
 {
-    rnc_format_t *f;
-    int           i;
+    int i;
 
     mrp_list_init(&api->hook);
 
@@ -78,15 +70,9 @@ int rnc_encoder_register(rnc_t *rnc, const char *name, rnc_enc_api_t *api)
     else {
         mrp_list_append(&rnc->encoders, &api->hook);
 
-        /* XXX hack/kludge */
         for (i = 0; api->types[i] != NULL; i++) {
-            f = mrp_allocz(sizeof(*f));
-
-            if (f == NULL)
+            if (rnc_compress_register(rnc, api->types[i]) < 0)
                 return -1;
-
-            f->name = api->types[i];
-            rnc_format_register(rnc, f);
         }
     }
 
@@ -102,7 +88,7 @@ rnc_encoder_t *rnc_encoder_create(rnc_t *rnc, uint32_t format)
     const char      *type;
     int              i;
 
-    type = rnc_format_name(rnc, RNC_FORMAT_FRMT(format));
+    type = rnc_compress_name(rnc, RNC_FORMAT_CMPR(format));
 
     if (type == NULL)
         goto invalid;

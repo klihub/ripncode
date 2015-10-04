@@ -41,7 +41,6 @@
 
 typedef struct rnc_dev_api_s rnc_dev_api_t;
 typedef struct rnc_dev_s     rnc_dev_t;
-typedef struct rnc_format_s  rnc_format_t;
 typedef struct rnc_track_s   rnc_track_t;
 typedef struct rnc_meta_s    rnc_meta_t;
 typedef struct rnc_enc_api_s rnc_enc_api_t;
@@ -49,13 +48,14 @@ typedef struct rnc_encoder_s rnc_encoder_t;
 typedef struct rnc_s         rnc_t;
 
 struct rnc_s {
-    mrp_list_hook_t  formats;            /* known formats */
-    mrp_list_hook_t  devices;            /* known devices */
-    mrp_list_hook_t  encoders;           /* known encoders */
-    rnc_dev_t       *dev;                /* device to read audio from */
-    rnc_track_t     *tracks;             /* tracks on device */
-    int              ntrack;             /* number of tracks */
-    rnc_encoder_t   *enc;                /* active encoder */
+    char            **formats;            /* registered compression schemes */
+    int               nformat;            /* number of registered schemes */
+    mrp_list_hook_t   devices;            /* known devices */
+    mrp_list_hook_t   encoders;           /* known encoders */
+    rnc_dev_t        *dev;                /* device to read audio from */
+    rnc_track_t      *tracks;             /* tracks on device */
+    int               ntrack;             /* number of tracks */
+    rnc_encoder_t    *enc;                /* active encoder */
 
     /* command line arguments */
     const char *argv0;                   /* our executable */

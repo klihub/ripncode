@@ -237,16 +237,18 @@ static int cdpa_get_tracks(rnc_dev_t *dev, rnc_track_t *buf, size_t size)
 static int cdpa_get_formats(rnc_dev_t *dev, uint32_t *buf, size_t size)
 {
     cdpa_t *cdpa = dev->data;
-    int pcma = RNC_ENCODING_SIGNED;
-    int rate = 44100;
+    int cmap = RNC_CHANNELMAP_LEFTRIGHT;
+    int cmpr = RNC_ENCODING_PCM;
     int chnl = 2;
+    int rate = RNC_SAMPLERATE_44100;
     int bits = 16;
+    int frmt = RNC_SAMPLE_SIGNED;
     int endn = data_bigendianp(cdpa->cdda) ? RNC_ENDIAN_BIG : RNC_ENDIAN_LITTLE;
 
     mrp_debug("getting supported device format(s)");
 
     if (size > 0)
-        *buf = RNC_FORMAT_ID(pcma, rate, chnl, bits, endn);
+        *buf = RNC_FORMAT_ID(cmap, cmpr, chnl, rate, bits, frmt, endn);
 
     return 1;
 }
@@ -255,15 +257,17 @@ static int cdpa_get_formats(rnc_dev_t *dev, uint32_t *buf, size_t size)
 static int cdpa_set_format(rnc_dev_t *dev, uint32_t f)
 {
     cdpa_t *cdpa = dev->data;
-    int pcma = RNC_ENCODING_SIGNED;
-    int rate = 44100;
+    int cmap = RNC_CHANNELMAP_LEFTRIGHT;
+    int cmpr = RNC_ENCODING_PCM;
     int chnl = 2;
+    int rate = RNC_SAMPLERATE_44100;
     int bits = 16;
+    int frmt = RNC_SAMPLE_SIGNED;
     int endn = data_bigendianp(cdpa->cdda) ? RNC_ENDIAN_BIG : RNC_ENDIAN_LITTLE;
 
     mrp_debug("setting active device format");
 
-    if (f != RNC_FORMAT_ID(pcma, rate, chnl, bits, endn))
+    if (f != RNC_FORMAT_ID(cmap, cmpr, chnl, rate, bits, frmt, endn))
         return -1;
     else
         return 0;
@@ -273,15 +277,17 @@ static int cdpa_set_format(rnc_dev_t *dev, uint32_t f)
 static uint32_t cdpa_get_format(rnc_dev_t *dev)
 {
     cdpa_t *cdpa = dev->data;
-    int pcma = RNC_ENCODING_SIGNED;
-    int rate = 44100;
+    int cmap = RNC_CHANNELMAP_LEFTRIGHT;
+    int cmpr = RNC_ENCODING_PCM;
     int chnl = 2;
+    int rate = RNC_SAMPLERATE_44100;
     int bits = 16;
+    int frmt = RNC_SAMPLE_SIGNED;
     int endn = data_bigendianp(cdpa->cdda) ? RNC_ENDIAN_BIG : RNC_ENDIAN_LITTLE;
 
     mrp_debug("getting active device format");
 
-    return RNC_FORMAT_ID(pcma, rate, chnl, bits, endn);
+    return RNC_FORMAT_ID(cmap, cmpr, chnl, rate, bits, frmt, endn);
 }
 
 

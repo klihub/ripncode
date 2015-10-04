@@ -29,78 +29,99 @@
 
 #include <ripncode/ripncode.h>
 
-static MRP_LIST_HOOK(formats);           /* list of known formats */
+static char *builtins[] = { "PCM" };
+static int   nbuiltin   = (int)MRP_ARRAY_SIZE(builtins);
+
+static char **formats;                   /* known/registered formats */
+int           nformat;                   /* number of known formats */
 
 
 int rnc_format_init(rnc_t *rnc)
 {
-    static rnc_format_t builtin[] = {
-#define BUILTIN(_type, _name)                                           \
-        [RNC_ENCODING_##_type] = { { NULL,NULL }, _name, RNC_ENCODING_##_type }
-        BUILTIN(UNKNOWN , "unknown" ),
-        BUILTIN(SIGNED  , "signed"  ),
-        BUILTIN(UNSIGNED, "unsigned"),
-        BUILTIN(FLOATING, "floating"),
-        BUILTIN(ALAW    , "alaw"    ),
-        BUILTIN(ULAW    , "ulaw"    ),
-#undef BUILTIN
-    }, *f;
+    rnc->formats = formats;
+    rnc->nformat = nformat;
 
-    mrp_list_init(&rnc->formats);
-    mrp_list_move(&rnc->formats, &formats);
-
-    for (f = builtin + RNC_ENCODING_ULAW; f >= builtin; f--) {
-        mrp_list_init(&f->hook);
-        mrp_list_prepend(&rnc->formats, &f->hook);
-    }
+    formats = NULL;
+    nformat = 0;
 
     return 0;
 }
 
 
-int rnc_format_register(rnc_t *rnc, rnc_format_t *format)
+static void register_builtins(rnc_t *rnc)
 {
-    static int id = RNC_ENCODING_OTHER;
+    char **b = builtins;
+    int    n = nbuiltin;
+    int    i;
 
-    mrp_list_init(&format->hook);
-    format->id = id++;
-
-    if (rnc == NULL)
-        mrp_list_append(&formats, &format->hook);
-    else
-        mrp_list_append(&rnc->formats, &format->hook);
-
-    return 0;
+    nbuiltin = 0;
+    for (i = 0; i < n; i++)
+        if (rnc_compress_register(rnc, b[i]) < 0)
+            exit(-1);
 }
 
 
-int rnc_format_lookup(rnc_t *rnc, const char *name)
+int rnc_compress_register(rnc_t *rnc, const char *name)
 {
-    mrp_list_hook_t *p, *n;
-    rnc_format_t    *f;
+    char **f;
+    int    n, id;
 
-    mrp_list_foreach(&rnc->formats, p, n) {
-        f = mrp_list_entry(p, typeof(*f), hook);
+    if (nformat == 0)
+        register_builtins(rnc);
 
-        if (!strcmp(f->name, name))
-            return f->id;
+    if (rnc == NULL) {
+        f = formats;
+        n = nformat;
+    }
+    else {
+        f = rnc->formats;
+        n = rnc->nformat;
     }
 
-    return RNC_ENCODING_UNKNOWN;
+    if (!mrp_reallocz(f, n, n + 1))
+        return -1;
+
+    f[n] = mrp_strdup(name);
+
+    if (f[n] == NULL)
+        return -1;
+
+    id = n++;
+
+    if (rnc == NULL) {
+        formats = f;
+        nformat = n;
+    }
+    else {
+        rnc->formats = f;
+        rnc->nformat = n;
+    }
+
+    return id;
 }
 
 
-const char *rnc_format_name(rnc_t *rnc, int id)
+int rnc_compress_id(rnc_t *rnc, const char *name)
 {
-    mrp_list_hook_t *p, *n;
-    rnc_format_t    *f;
+    char **f = rnc ? rnc->formats : formats;
+    int    n = rnc ? rnc->nformat : nformat;
+    int    i;
 
-    mrp_list_foreach(&rnc->formats, p, n) {
-        f = mrp_list_entry(p, typeof(*f), hook);
+    for (i = 0; i < n; i++)
+        if (!strcmp(f[i], name))
+            return i;
 
-        if (f->id == id)
-            return f->name;
-    }
+    return -1;
+}
+
+
+const char *rnc_compress_name(rnc_t *rnc, int id)
+{
+    char **f = rnc ? rnc->formats : formats;
+    int    n = rnc ? rnc->nformat : nformat;
+
+    if (0 <= id && id < n)
+        return f[id];
 
     return NULL;
 }

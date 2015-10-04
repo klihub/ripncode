@@ -34,73 +34,188 @@
 
 
 /**
- * A registered audio format specification.
+ * @brief Audio format identification.
+ *
+ * We encode the details of a particular audio format into a single 32-bit
+ * word, generally referred to as the audio format identifier. This format
+ * identifier specifies the following properties of the audio stream:
+ *
+ *  1) channel map (not really supported ATM)
+ *
+ *    Channel mapping. Currenntly only the left-right stereo mapping is
+ *    supported.
+ *
+ *  2) audio compression method (5 bits)
+ *
+ *     The compression method is either 0 (RNC_COMPRESS_PCM), for uncompressed
+ *     audio, or the id of a registered compressed audio format, corresponding
+ *     to a lossless compression scheme (such as FLAC), or a lossy compression
+ *     scheme (such as OGG, or MP3).
+ *
+ *  3) audio channels (3 bits)
+ *
+ *    The number of audio channels in the stream. The supported channel
+ *    numbers are 1 - 8.
+ *
+ *  4) sampling rate (2 bits)
+ *
+ *    The sampling rate of the audio stream. We support only four different
+ *    sampling rates: 44.1 kHz, 48 kHz, 96 kHz, and 192 kHz.
+ *
+ *  5) bits per sample (2 bits)
+ *
+ *    The number of audio bits in a single sample. Only four different bps
+ *    values are supported: 8, 16, 24, and 32
+ *
+ *  6) sample type (2 bits)
+ *
+ *     The sample type specifies how a single sample is represented in the
+ *     audio stream, and it can be one of signed integer, unsigned integer,
+ *     or floating point.
+ *
+ *  7) sample endianness (1 bit)
+ *
+ *    The sample endianness specifies whether integer samples are represented
+ *    in LSB or MSB first order.
+ *
+ *
+ *
+ * Here is the layout of how these properties are curently encoded into
+ * an audio format identifier:
+ *
+ * |         :  14-10   :    9-7   :  6-5 :  4-3 :   2-1  :    0   |
+ * | chnlmap : compress : channels : rate : bits : sample : endian |
+ * |         :     5    :     3    :   2  :   2  :    2   :    1   |
+ *
+ *
+ * With this setup, excluding the channel map, we currently use
+ *
+ *         channel map: 0 (well, 0 as not really supported ATM)
+ *         compression: 5 (0 == uncompressed, others registered id)
+ *            channels: 3 (1 - 8)
+ *         sample rate: 2 (44.1 kHz, 48 kHz, 96 kHz, 192 kHz)
+ *     bits per sample: 2 (8, 16, 24, 32)
+ *         sample type: 2 (unsigned, signed, floating)
+ *   sample endianness: 1 (little, big)
+ *   ----------------------------------------------------------------
+ *                     15 bits
+ *
+ * leaving us with 17 bits to spare for future expansion and channel map
+ * support if we ever need it.
+ *
  */
 
+/**
+ * @brief Channel map.
+ *
+ * This is not much more than a placeholder/work-in-progress. Right now,
+ * we don't really support anything else than basic 2 channel left-right
+ * stereo audio.
+ */
 typedef enum {
-    RNC_ENCODING_UNKNOWN,                /* signed integer PCM */
-    RNC_ENCODING_SIGNED,                 /* signed integer PCM */
-    RNC_ENCODING_UNSIGNED,               /* unsigned integer PCM */
-    RNC_ENCODING_FLOATING,               /* floating-point PCM */
-    RNC_ENCODING_ALAW,                   /* a-law */
-    RNC_ENCODING_ULAW,                   /* u-law */
-    RNC_ENCODING_OTHER,                  /* compressed audio */
-} rnc_encoding_t;
+    RNC_CHANNELMAP_LEFTRIGHT,            /* we only support this for now */
+} rnc_chnlmap_t;
 
+
+/**
+ * @brief Audio compression scheme.
+ *
+ * The audio compression scheme indicates which compression algorithm the
+ * audio stream is encoded with, if any. No compression (0) corresponds to
+ * plain uncompressed PCM. Other ids correspond to dynamically registered
+ * compression algorithms.
+ */
+typedef enum {
+    RNC_COMPRESS_NONE = 0,
+    RNC_ENCODING_PCM  = 0,               /* uncompressed PCM audio */
+    RNC_COMPRESS_OTHER,                  /* compressed audio */
+    /*                                    * dynamically registered range */
+    RNC_COMPRESS_MAX  = 32               /* max encoder id */
+} rnc_compress_t;
+
+
+/**
+ * @brief Sample type.
+ *
+ * Specifies how a single sample is represented in the audio stream,
+ * an signed integer, an unsigned integer, or a floating-point number.
+ */
+typedef enum {
+    RNC_SAMPLE_SIGNED,                   /* singed integer samples */
+    RNC_SAMPLE_UNSIGNED,                 /* unsigned integer samples */
+    RNC_SAMPLE_FLOATING,                 /* floating point samples */
+} rnc_sampletype_t;
+
+
+/**
+ * @brief Sample endiannes.
+ *
+ * Specifies whether integer samples are LFB-first (little endian) or
+ * MSB-first (big endian).
+ */
 typedef enum {
     RNC_ENDIAN_LITTLE = 0,               /* Hiawatha */
     RNC_ENDIAN_BIG,                      /* Winnetou */
 } rnc_endian_t;
 
-struct rnc_format_s {
-    mrp_list_hook_t   hook;              /* to list of registered formats */
-    const char       *name;              /* registered format name */
-    int               id;
-};
+
+/**
+ * @brief Helper functions/macros to map sampling rates to/from ids.
+ */
+typedef enum {
+    RNC_SAMPLERATE_44100 = 0,
+    RNC_SAMPLERATE_48000,
+    RNC_SAMPLERATE_96000,
+    RNC_SAMPLERATE_192000
+} rnc_samplerate_t;
+#define RNC_SAMPLING_RATES 44100, 48000, 96000, 192000
+
+static inline int rnc_freq_id(int freq) {
+    int freqs[] = { RNC_SAMPLING_RATES, -1};
+    int i;
+
+    for (i = 0; freqs[i] != -1; i++)
+        if (freqs[i] == freq)
+            return i;
+
+    return -1;
+}
+
+static inline int rnc_id_freq(int id) {
+    int freqs[] = { RNC_SAMPLING_RATES };
+
+    if (0 <= id && id < (int)MRP_ARRAY_SIZE(freqs))
+        return freqs[id];
+
+    return -1;
+}
 
 
 /**
- * @brief Encoding for format identifiers.
+ * @brief Assigned bit-widths and offsets within a format identifier.
  *
- * We encode audio formats into a single 32-bit word. The format
- * identifier contains the audio coding, the sampling rate, the
- * number of channels in use, the number of bits per sample, and
- * the endianness of samples. Currently we use only 23 bits in a
- * way depicted below. We have 9 more bits to spare in case we
- * need to squeeze more data into a format id. Here is the current
- * layout in use:
- *
- *     encoding              :  8 bits (registered encoding id)
- *     sample rate, 0 - 51200:  9 bits (rate / 100)
- *     channels, 1 - 8       :  3 bits (channels - 1)
- *     bits, 8/16/24/32      :  2 bits (bits / 8 - 1)
- *     endianness, little/big:  1 bit  (0 = little, 1 = big)
- * ------------------------------------
- *                             23 bits
- *
- * Format id layout:
- *
- * |  22-15 : 14-6 :   5-3    :  2-1 :    0   |
- * | format : rate : channels : bits : endian |
- * |    8   :   9  :    3     :   2  :    1   |
- *
+ * These macros correspond to the layout for audio format identifiers
+ * described above. If you change the layout, be sure to update these
+ * macros and vice versa.
  */
-
-/**
- * @brief Various bit-widths and offsets within a format identifier.
- */
-#define __RNC_FRMT_BITS 8
-#define __RNC_RATE_BITS 9
+#define __RNC_CMAP_BITS 5
+#define __RNC_CMPR_BITS 5
 #define __RNC_CHNL_BITS 3
+#define __RNC_RATE_BITS 2
 #define __RNC_BITS_BITS 2
+#define __RNC_SMPL_BITS 2
 #define __RNC_ENDN_BITS 1
-#define __RNC_FRMT_SHFT (1 + 2 + 3 + 9)
-#define __RNC_RATE_SHFT (1 + 2 + 3)
-#define __RNC_CHNL_SHFT (1 + 2)
-#define __RNC_BITS_SHFT (1)
-#define __RNC_ENDN_SHFT (0)
+#define __RNC_CMAP_OFFS (1 + 2 + 2 + 2 + 3 + 5)
+#define __RNC_CMPR_OFFS (1 + 2 + 2 + 2 + 3)
+#define __RNC_CHNL_OFFS (1 + 2 + 2 + 2)
+#define __RNC_RATE_OFFS (1 + 2 + 2)
+#define __RNC_BITS_OFFS (1 + 2)
+#define __RNC_SMPL_OFFS (1)
+#define __RNC_ENDN_OFFS (0)
 
-
+/**
+ * @brief Bit-fiddling helper macros.
+ */
 /**
  * @brief Bit-fiddling helper macros.
  */
@@ -108,27 +223,31 @@ struct rnc_format_s {
 #define __RNC_BITS(_word, _nbit, _offs)                         \
     (((_word) & __RNC_MASK(_nbit, _offs)) >> _offs)
 #define __RNC_FORMAT_BITS(_id, _what)                           \
-    __RNC_BITS(_id, __RNC_##_what##_BITS, __RNC_##_what##_SHFT)
+    __RNC_BITS(_id, __RNC_##_what##_BITS, __RNC_##_what##_OFFS)
 
 /**
- * @brief Encode format information into a format identifier.
+ * @brief (Blindly) encode audio format into a format identifier.
  */
-#define RNC_FORMAT_ID(_frmt, _rate, _chnl, _bits, _endn)   \
-    ((uint32_t)                                            \
-     (( (_frmt)           << __RNC_FRMT_SHFT) |            \
-      (((_rate) / 100  )  << __RNC_RATE_SHFT) |            \
-      (((_chnl) -   1  )  << __RNC_CHNL_SHFT) |            \
-      (((_bits) / 8 - 1)  << __RNC_BITS_SHFT) |            \
-      ( (_endn)           << __RNC_ENDN_SHFT)))
+#define RNC_FORMAT_ID(_cmap, _cmpr, _chnl, _rate, _bits, _smpl, _endn)   \
+    ((uint32_t)                                                          \
+     ( (_cmap)           << __RNC_CMAP_OFFS) |                           \
+     ( (_cmpr)           << __RNC_CMPR_OFFS) |                           \
+     (((_chnl) - 1)      << __RNC_CHNL_OFFS) |                           \
+     ( (_rate)           << __RNC_RATE_OFFS) |                           \
+     (((_bits) / 8 - 1)  << __RNC_BITS_OFFS) |                           \
+     ( (_smpl)           << __RNC_SMPL_OFFS) |                           \
+     ( (_endn)           << __RNC_ENDN_OFFS))
 
 /**
- * @brief Decode various format information from a format identifier.
+ * @brief Decode format information from a format identifier.
  */
-#define RNC_FORMAT_ENDN(_id) ( __RNC_FORMAT_BITS(_id, ENDN)         )
-#define RNC_FORMAT_BITS(_id) ((__RNC_FORMAT_BITS(_id, BITS) + 1) * 8)
+#define RNC_FORMAT_CMAP(_id) ( __RNC_FORMAT_BITS(_id, CMAP)         )
+#define RNC_FORMAT_CMPR(_id) ( __RNC_FORMAT_BITS(_id, CMPR)         )
 #define RNC_FORMAT_CHNL(_id) ( __RNC_FORMAT_BITS(_id, CHNL) + 1     )
-#define RNC_FORMAT_RATE(_id) ( __RNC_FORMAT_BITS(_id, RATE) * 100   )
-#define RNC_FORMAT_FRMT(_id) ( __RNC_FORMAT_BITS(_id, FRMT)         )
+#define RNC_FORMAT_RATE(_id) ( __RNC_FORMAT_BITS(_id, RATE)         )
+#define RNC_FORMAT_BITS(_id) ((__RNC_FORMAT_BITS(_id, BITS) + 1) * 8)
+#define RNC_FORMAT_SMPL(_id) ( __RNC_FORMAT_BITS(_id, SMPL)         )
+#define RNC_FORMAT_ENDN(_id) ( __RNC_FORMAT_BITS(_id, ENDN)         )
 
 
 /**
@@ -136,42 +255,46 @@ struct rnc_format_s {
  *
  * Initialize the format-handling bits of RNC.
  *
- * @param [in] rnc  ripncode instance to initialize
+ * @param [in] rnc  RNC instance to initialize
  *
  * @return Returns 0 on success, -1 on error.
  */
 int rnc_format_init(rnc_t *rnc);
 
+
 /**
- * @brief Register a new audio format.
+ * @brief Register a new audio compression/encoding scheme.
  *
- * Register an audio format with ripncode.
+ * Register an audio compression/encoding scheme with ripncode.
  *
+ * @param [in] rnc     RNC instance to register scheme with
  * @param [in] format  format to register
  *
- * @return Returns the id of the format upon success, -1 on error.
+ * @return Returns the id of the scheme upon success, -1 on error.
  */
-int rnc_format_register(rnc_t *rnc, rnc_format_t *format);
+int rnc_compress_register(rnc_t *rnc, const char *name);
 
 
 /**
- * @brief Look up the id of a given format name.
+ * @brief Look up the id of a given compression/encoding scheme by name.
  *
  * @param [in] rnc   RNC instance
- * @param [in] name  format name to look up id for
+ * @param [in] name  scheme name to look up id for
  *
- * @return Returns the id for the given format or -1 if it was not found.
+ * @return Returns the id for the given scheme or -1 if it was not found.
  */
-int rnc_format_lookup(rnc_t *rnc, const char *name);
+int rnc_compress_id(rnc_t *rnc, const char *name);
+
 
 /**
- * @brief Look up the name of a given format id.
+ * @brief Look up the name of a given compression/encoding scheme name by id.
  *
  * @param [in] rnc  RNC instance
- * @param [in] id   format id
+ * @param [in] id   scheme id
  *
  * @return Returns the name for the given id, or NULL if it was not found.
  */
-const char *rnc_format_name(rnc_t *rnc, int id);
+const char *rnc_compress_name(rnc_t *rnc, int id);
+
 
 #endif /* __RIPNCODE_FORMAT_H__ */

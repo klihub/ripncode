@@ -53,7 +53,7 @@ int main(int argc, char *argv[], char *envp[])
     rnc_t rnc;
     rnc_track_t tracks[64];
     int ntrack, i, j, fdf, fdr;
-    int flac, format, bs;
+    int cmap, flac, chnl, rate, bits, frmt, endn, format, bs;
     char *sbuf;
     int r, w, n;
 
@@ -92,12 +92,18 @@ int main(int argc, char *argv[], char *envp[])
     if (rnc_device_seek(rnc.dev, tracks + i, 0) < 0)
         rnc_fatal(&rnc, "failed to seek to beginning of track #%d.", i);
 
-    flac = rnc_format_lookup(&rnc, "flac");
+    flac = rnc_compress_id(&rnc, "flac");
 
-    if (flac == RNC_ENCODING_UNKNOWN)
-        rnc_fatal(&rnc, "failed to look up FLAC format id");
+    if (flac < 0)
+        rnc_fatal(&rnc, "failed to look up FLAC compression id");
 
-    format  = RNC_FORMAT_ID(flac, 44100, 2, 16, RNC_ENDIAN_LITTLE);
+    cmap = RNC_CHANNELMAP_LEFTRIGHT;
+    chnl = 2;
+    rate = RNC_SAMPLERATE_44100;
+    bits = 16;
+    frmt = RNC_SAMPLE_SIGNED;
+    endn = RNC_ENDIAN_LITTLE;
+    format = RNC_FORMAT_ID(cmap, flac, chnl, rate, bits, frmt, endn);
     rnc.enc = rnc_encoder_create(&rnc, format);
 
     if (rnc.enc == NULL)

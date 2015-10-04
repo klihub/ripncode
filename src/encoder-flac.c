@@ -74,7 +74,7 @@ int flen_create(rnc_encoder_t *enc, uint32_t format)
 {
     flen_t *fe;
     FLAC__StreamEncoder *se;
-    int rate, chnl, bits, endn, one;
+    int chnl, rate, bits, smpl, endn, one;
 
     mrp_debug("creating FLAC encoder for format 0x%x", format);
 
@@ -88,10 +88,14 @@ int flen_create(rnc_encoder_t *enc, uint32_t format)
     if (enc == NULL)
         goto nomem;
 
-    rate = RNC_FORMAT_RATE(format);
     chnl = RNC_FORMAT_CHNL(format);
+    rate = rnc_id_freq(RNC_FORMAT_RATE(format));
     bits = RNC_FORMAT_BITS(format);
+    smpl = RNC_FORMAT_SMPL(format);
     endn = RNC_FORMAT_ENDN(format);
+
+    if (smpl != RNC_SAMPLE_SIGNED) /* XXX should convert instead */
+        goto invalid;
 
     one = 1;
     if ((endn == RNC_ENDIAN_BIG    &&  *((char *)&one)) ||
