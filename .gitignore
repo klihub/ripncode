@@ -1,0 +1,37 @@
+# Generated directories
+autom4te.cache/
+ripncode
+.deps/
+.libs/
+
+# Binary files
+*.o
+*.l[ao]
+
+# Emacs backup files
+*~
+src/*~
+
+# Generated files
+*.pc
+m4/*
+!m4/shave.m4
+aclocal.m4
+compile
+config.*
+configure
+depcomp
+install-sh
+libtool
+linker-script.*
+ltmain.sh
+Makefile
+Makefile.in
+missing
+shave
+shave-libtool
+ylwrap
+
+src/stamp-h1
+
+# Generated code files
