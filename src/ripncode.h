@@ -43,6 +43,7 @@ typedef struct rnc_dev_api_s rnc_dev_api_t;
 typedef struct rnc_dev_s     rnc_dev_t;
 typedef struct rnc_track_s   rnc_track_t;
 typedef struct rnc_meta_s    rnc_meta_t;
+typedef struct rnc_buf_s     rnc_buf_t;
 typedef struct rnc_enc_api_s rnc_enc_api_t;
 typedef struct rnc_encoder_s rnc_encoder_t;
 typedef struct rnc_s         rnc_t;
@@ -74,6 +75,7 @@ struct rnc_s {
 #include <ripncode/device.h>
 #include <ripncode/track.h>
 #include <ripncode/metadata.h>
+#include <ripncode/buffer.h>
 #include <ripncode/encoder.h>
 
 #endif /* __RIPNCODE_H__ */

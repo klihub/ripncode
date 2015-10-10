@@ -42,11 +42,7 @@ typedef struct {
     rnc_enc_data_cb_t    data_cb;
     int                  chnl;
     int                  bits;
-    char                *buf;
-    char                *w;
-    char                *r;
-    size_t               size;
-    size_t               data;
+    rnc_buf_t           *buf;
     int                  swap : 1;
     int                  busy : 1;
 } flen_t;
@@ -96,6 +92,11 @@ int flen_create(rnc_encoder_t *enc, uint32_t format)
 
     if (smpl != RNC_SAMPLE_SIGNED) /* XXX should convert instead */
         goto invalid;
+
+    fe->buf = rnc_buf_create("FLAC-encoder", 0, BUFFER_CHUNK);
+
+    if (fe->buf == NULL)
+        goto nomem;
 
     one = 1;
     if ((endn == RNC_ENDIAN_BIG    &&  *((char *)&one)) ||
@@ -389,19 +390,7 @@ int flen_read(rnc_encoder_t *enc, void *buf, size_t size)
     if (enc == NULL || (fe = enc->data) == NULL)
         goto invalid;
 
-    mrp_debug("data: %zu", fe->data);
-
-    if (size > fe->data)
-        size = fe->data;
-
-    if (size == 0)
-        return 0;
-
-    memcpy(buf, fe->r, size);
-    fe->r += size;
-    fe->data -= size;
-
-    return (int)size;
+    return rnc_buf_read(fe->buf, buf, size);
 
  invalid:
     errno = EINVAL;
@@ -416,7 +405,6 @@ __flen_write(const FLAC__StreamEncoder *se, const FLAC__byte buffer[],
 {
     rnc_encoder_t *enc;
     flen_t *fe;
-    size_t  used, space, diff;
 
     MRP_UNUSED(se);
     MRP_UNUSED(samples);
@@ -428,32 +416,8 @@ __flen_write(const FLAC__StreamEncoder *se, const FLAC__byte buffer[],
     if ((enc = client_data) == NULL || (fe = enc->data) == NULL)
         goto invalid;
 
-    used  = fe->w - fe->buf;
-    space = fe->size - used;
-
-    if (space < bytes) {
-        diff = bytes - space;
-        if (diff < BUFFER_CHUNK)
-            diff = BUFFER_CHUNK;
-
-        if (!mrp_reallocz(fe->buf, fe->size, fe->size + diff))
-            goto nomem;
-
-        fe->size += diff;
-        fe->w     = fe->buf + used;
-    }
-
-    memcpy(fe->buf + used, buffer, bytes);
-    fe->w += bytes;
-    fe->r  = fe->buf;
-
-    if (fe->w - fe->buf > (ptrdiff_t)fe->data)
-        fe->data = fe->w - fe->buf;
-
-    if (samples > 0 && fe->data_cb != NULL)
-        fe->data_cb(enc, fe->data);
-
-    mrp_debug("buffer size: %zu bytes", fe->size);
+    if (rnc_buf_write(fe->buf, buffer, bytes) < 0)
+        goto nomem;
 
     return FLAC__STREAM_ENCODER_WRITE_STATUS_OK;
 
@@ -478,10 +442,8 @@ __flen_seek(const FLAC__StreamEncoder *se, FLAC__uint64 abs_offset,
     if ((enc = client_data) == NULL || (fe = enc->data) == NULL)
         goto invalid;
 
-    if (abs_offset > fe->size)
+    if (rnc_buf_wseek(fe->buf, abs_offset, SEEK_SET) < 0)
         goto invalid;
-
-    fe->w = fe->buf + abs_offset;
 
     return FLAC__STREAM_ENCODER_SEEK_STATUS_OK;
 
@@ -505,11 +467,10 @@ static FLAC__StreamEncoderTellStatus
     if ((enc = client_data) == NULL || (fe = enc->data) == NULL)
         goto invalid;
 
-    *abs_offset = fe->w - fe->buf;
+    *abs_offset = rnc_buf_wseek(fe->buf, 0, SEEK_CUR);
     return FLAC__STREAM_ENCODER_TELL_STATUS_OK;
 
  invalid:
-    mrp_debug("returning invalid...");
     errno = EINVAL;
     return FLAC__STREAM_ENCODER_TELL_STATUS_ERROR;
 }

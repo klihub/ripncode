@@ -86,6 +86,13 @@ fi
 AC_SUBST(FLAC_CFLAGS)
 AC_SUBST(FLAC_LIBS)
 
+# Check for the check test framework.
+PKG_CHECK_MODULES(CHECK, check, [have_check=yes], [have_check=no])
+
+AM_CONDITIONAL(HAVE_CHECK, test "$have_check" = "yes")
+AC_SUBST(CHECK_CFLAGS)
+AC_SUBST(CHECK_LIBS)
+
 # Shave by default.
 SHAVE_INIT([build-aux], [enable])
 

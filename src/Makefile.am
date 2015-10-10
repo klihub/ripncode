@@ -1,7 +1,8 @@
-SUBDIRS      = .
-bin_PROGRAMS = 
+SUBDIRS         = .
+bin_PROGRAMS    =
+noinst_PROGRAMS =
 
-AM_CFLAGS    = $(WARNING_CFLAGS) $(AM_CPPFLAGS) -I$(top_srcdir) -I$(top_builddir)
+AM_CFLAGS = $(WARNING_CFLAGS) $(AM_CPPFLAGS) -I$(top_srcdir) -I$(top_builddir)
 
 
 #########################
@@ -36,6 +37,7 @@ rnc_SOURCES =			\
 	device-cdparanoia.c	\
 	encoder.c		\
 	encoder-flac.c		\
+	buffer.c		\
 	rnc.c
 
 rnc_CFLAGS =			\
@@ -49,3 +51,45 @@ rnc_LDADD =			\
 	$(CDIO_LIBS)		\
 	$(FLAC_LIBS)
 
+
+#########################
+# tests
+#
+
+if HAVE_CHECK
+TESTS =
+noinst_PROGRAMS += $(TESTS)
+
+# buffer-test
+TESTS += buffer-test
+
+buffer_test_SOURCES =		\
+	buffer.c		\
+	tests/buffer-test.c
+
+buffer_test_CFLAGS =		\
+	$(AM_CFLAGS)		\
+	$(CHECK_CLAGS)
+
+buffer_test_LDADD =		\
+	$(MURPHY_LIBS)		\
+	$(CHECK_LIBS)
+
+check: $(TESTS)
+	for t in $(TESTS); do $$t; done
+
+endif
+
+noinst_PROGRAMS += seek-test
+
+seek_test_SOURCES =		\
+	buffer.c		\
+	tests/seek-test.c
+
+seek_test_CFLAGS =		\
+	$(AM_CFLAGS)		\
+	$(CHECK_CLAGS)
+
+seek_test_LDADD =		\
+	$(MURPHY_LIBS)		\
+	$(CHECK_LIBS)
