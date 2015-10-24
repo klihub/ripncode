@@ -96,6 +96,10 @@ static void setup_defaults(rnc_t *rnc, const char *argv0)
     rnc->log_mask   = MRP_LOG_UPTO(MRP_LOG_WARNING);
     rnc->log_target = "stdout";
 
+    rnc->rip    = "all";
+    rnc->output = "track";
+    rnc->format = "flac";
+
     mrp_log_set_mask(rnc->log_mask);
     mrp_log_set_target(rnc->log_target);
 }

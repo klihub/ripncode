@@ -37,6 +37,8 @@ rnc_SOURCES =			\
 	device-cdparanoia.c	\
 	encoder.c		\
 	encoder-flac.c		\
+	metadata.c		\
+	metadata-tracklist.c	\
 	buffer.c		\
 	rnc.c
 

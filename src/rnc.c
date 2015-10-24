@@ -33,6 +33,7 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <limits.h>
 
 #include <ripncode/ripncode.h>
 #include <ripncode/setup.h>
@@ -42,122 +43,317 @@
         exit(1);                                        \
 } while (0)
 
+#define rnc_warning(_r, ...) do {                       \
+        mrp_log_warning("warning: " __VA_ARGS__);       \
+    } while (0)
 
-#define rnc_info(_r, ...) do {                  \
-        mrp_log_info(__VA_ARGS__);              \
+#define rnc_error(_r, ...) do {                         \
+        mrp_log_error("error: " __VA_ARGS__);           \
+    } while (0)
+
+#define rnc_info(_r, ...) do {                          \
+        mrp_log_info(__VA_ARGS__);                      \
     } while (0);
 
 
-int main(int argc, char *argv[], char *envp[])
+
+static rnc_t *rnc_init(int argc, char *argv[], char *envp[])
 {
-    rnc_t rnc;
-    rnc_track_t tracks[64];
-    int ntrack, i, j, fdf, fdr;
-    int cmap, flac, chnl, rate, bits, frmt, endn, format, bs;
-    char *sbuf;
-    int r, w, n;
+    static rnc_t rnc;
 
     mrp_clear(&rnc);
-
     rnc_format_init(&rnc);
     rnc_device_init(&rnc);
     rnc_encoder_init(&rnc);
+    rnc_meta_init(&rnc);
 
     rnc_cmdline_parse(&rnc, argc, argv, envp);
 
-    printf("input:  %s\n", rnc.device);
-    printf("output: %s\n", rnc.output);
-    printf("format: %s\n", rnc.format ?  rnc.format : "flac");
-    printf("tracks: %s\n", rnc.rip ? rnc.rip : "all");
+    return &rnc;
+}
 
-    rnc.dev = rnc_device_open(&rnc, rnc.device);
 
-    if (rnc.dev == NULL)
-        rnc_fatal(&rnc, "failed to open device '%s'", rnc.device);
+static void discover_tracks(rnc_t *rnc)
+{
+    int n;
 
-    rnc_info(&rnc, "%s opened successfully...", rnc.device);
+    rnc->dev = rnc_device_open(rnc, rnc->device);
 
-    ntrack = rnc_device_get_tracks(rnc.dev, tracks, MRP_ARRAY_SIZE(tracks));
+    if (rnc->dev == NULL)
+        rnc_fatal(rnc, "failed to open device '%s'", rnc->device);
 
-    if (ntrack < 0)
-        rnc_fatal(&rnc, "failed to get tracklist");
+    rnc->ntrack = rnc_device_get_tracks(rnc->dev, NULL, 0);
 
-    for (i = 0; i < ntrack; i++) {
-        printf("#%d: %d:%2.2d, %d block starting at %d\n", i,
-               (int)(tracks[i].length / 60), ((int)tracks[i].length % 60),
-               tracks[i].nblk, tracks[i].fblk);
+    if (rnc->ntrack <= 0)
+        rnc_fatal(rnc, "failed to find any audio tracks on '%s'", rnc->device);
+
+    rnc->tracks = mrp_allocz_array(typeof(rnc->tracks[0]), rnc-> ntrack);
+
+    if (rnc->tracks == NULL)
+        rnc_fatal(rnc, "failed to allocate %d tracks", rnc->ntrack);
+
+    n = rnc_device_get_tracks(rnc->dev, rnc->tracks, rnc->ntrack);
+
+    if (n != rnc->ntrack)
+        rnc_fatal(rnc, "inconsistent tracks read from '%s'", rnc->device);
+}
+
+
+int encode_track(rnc_t *rnc, rnc_track_t *t)
+{
+    rnc_encoder_t *enc;
+    rnc_meta_t    *meta;
+    int            cmpr, cmap, chnl, rate, bits, smpl, endn, fid;
+    int            blksize, bufsize, n, i;
+    char          *buf;
+
+    if (rnc_device_seek(rnc->dev, t, 0) < 0) {
+        rnc_error(rnc, "failed to seek to beginning of track #%d", t->id);
+        return -1;
     }
 
-    i = 0;
-    if (rnc_device_seek(rnc.dev, tracks + i, 0) < 0)
-        rnc_fatal(&rnc, "failed to seek to beginning of track #%d.", i);
-
-    flac = rnc_compress_id(&rnc, "flac");
-
-    if (flac < 0)
-        rnc_fatal(&rnc, "failed to look up FLAC compression id");
-
+    cmpr = rnc_compress_id(rnc, rnc->format);
     cmap = RNC_CHANNELMAP_LEFTRIGHT;
     chnl = 2;
     rate = RNC_SAMPLERATE_44100;
     bits = 16;
-    frmt = RNC_SAMPLE_SIGNED;
+    smpl = RNC_SAMPLE_SIGNED;
     endn = RNC_ENDIAN_LITTLE;
-    format = RNC_FORMAT_ID(cmap, flac, chnl, rate, bits, frmt, endn);
-    rnc.enc = rnc_encoder_create(&rnc, format);
 
-    if (rnc.enc == NULL)
-        rnc_fatal(&rnc, "failed to open FLAC encoder");
-
-    if (rnc_encoder_set_quality(rnc.enc, 0xffffU, 0xffffU) < 0)
-        rnc_fatal(&rnc, "failed to set FLAC encoder quality");
-
-    if (rnc_encoder_open(rnc.enc) < 0)
-        rnc_fatal(&rnc, "failed to open FLAC encoder");
-
-    bs   = rnc_device_get_blocksize(rnc.dev);
-    sbuf = alloca(bs);
-
-    if ((fdr = open("test.raw", O_WRONLY | O_CREAT, 0644)) < 0)
-        rnc_fatal(&rnc, "failed to open test.raw");
-
-    for (j = 0; j < (int)tracks[i].nblk; j++) {
-        if ((n = rnc_device_read(rnc.dev, sbuf, bs)) < 0)
-            rnc_fatal(&rnc, "failed to read data from device (%d: %s)",
-                      errno, strerror(errno));
-
-        if (rnc_encoder_write(rnc.enc, sbuf, bs) < 0)
-            rnc_fatal(&rnc, "failed to write to FLAC encoder");
-
-        if ((n = write(fdr, sbuf, bs)) < 0)
-            rnc_fatal(&rnc, "failed to write to RAW data");
+    if (cmpr < 0) {
+        rnc_error(rnc, "failed to find encoder for format '%s'", rnc->format);
+        return -1;
     }
 
-    close(fdr);
+    fid = RNC_FORMAT_ID(cmap, cmpr, chnl, rate, bits, smpl, endn);
+    enc = rnc_encoder_create(rnc, fid);
 
-    if (rnc_encoder_finish(rnc.enc) < 0)
-        rnc_fatal(&rnc, "failed to properly finish FLAC encoding");
+    if (enc == NULL) {
+        rnc_error(rnc, "failed to create encoder for format '%s'", rnc->format);
+        return -1;
+    }
 
-    if ((fdf = open("test.flac", O_WRONLY|O_CREAT, 0644)) < 0)
-        rnc_fatal(&rnc, "failed to open test.flac");
+    rnc_encoder_set_quality(enc, 0xffffU, 0xffffU);
 
-    while ((r = rnc_encoder_read(rnc.enc, sbuf, bs)) > 0) {
+    meta = rnc_meta_lookup(rnc->db, t->id);
+
+    if (meta != NULL) {
+        rnc_encoder_set_metadata(enc, meta);
+        rnc_meta_free(meta);
+    }
+
+    blksize = rnc_device_get_blocksize(rnc->dev);
+    bufsize = 32 * blksize;
+    buf     = alloca(bufsize);
+
+    for (i = 0; i < (int)t->nblk; i += n / blksize) {
+        n = rnc_device_read(rnc->dev, buf, bufsize);
+
+        if (n < 0) {
+            rnc_error(rnc, "failed to read block #%d of track #%d", i, t->id);
+            goto fail;
+        }
+
+        if (rnc_encoder_write(enc, buf, n) < 0) {
+            rnc_error(rnc, "failed to encode blocks #%d-%d of track #%d",
+                      i, i + bufsize / blksize, t->id);
+            goto fail;
+        }
+
+        printf("\rtrack #%d: %d/%u", t->id, i + n / blksize, t->nblk);
+        fflush(stdout);
+    }
+
+    if (rnc_encoder_finish(enc) < 0) {
+        rnc_error(rnc, "failed to finalize encoding of track #%d", t->id);
+        goto fail;
+    }
+
+    printf("\rtrack #%d: done                 \n", t->id);
+    fflush(stdout);
+
+    rnc->enc = enc;
+    return 0;
+
+ fail:
+    rnc_encoder_destroy(enc);
+    return -1;
+}
+
+
+int write_track(rnc_t *rnc, rnc_track_t *t)
+{
+    char path[PATH_MAX], buf[64 * 1024];
+    int  r, w, n, fd;
+
+    n = snprintf(path, sizeof(path), "%s-%d.%s", rnc->output, t->id,
+                 rnc->format);
+
+    if (n < 0 || n >= (int)sizeof(path)) {
+        rnc_error(rnc, "invalid output file name for track #%d", t->id);
+        goto fail;
+    }
+
+    fd = open(path, O_WRONLY | O_CREAT, 0644);
+
+    if (fd < 0) {
+        rnc_error(rnc, "failed to open '%s'", path);
+        goto fail;
+    }
+
+    while ((r = rnc_encoder_read(rnc->enc, buf, sizeof(buf))) > 0) {
         w = 0;
+
         while (w < r) {
-            n = write(fdf, sbuf + w, r - w);
+            n = write(fd, buf + w, r - w);
 
             if (n < 0) {
-                if (errno == EINTR || errno == EAGAIN)
+                if (errno == EINTR)
                     continue;
-                else
-                    rnc_fatal(&rnc, "failed to write to test.flac");
+                else {
+                    rnc_error(rnc, "failed to write to '%s' (%d: %s)", path,
+                              errno, strerror(errno));
+                    goto fail;
+                }
             }
 
             w += n;
         }
     }
 
-    close(fdf);
+    close(fd);
+    rnc_encoder_destroy(rnc->enc);
+    rnc->enc = NULL;
+
+    return 0;
+
+ fail:
+    rnc_encoder_destroy(rnc->enc);
+    rnc->enc = NULL;
+
+    return -1;
+}
+
+
+int rip_track(rnc_t *rnc, int idx)
+{
+    if (encode_track(rnc, rnc->tracks + idx) < 0)
+        return -1;
+
+    if (write_track(rnc, rnc->tracks + idx) < 0)
+        return -1;
+
+    return 0;
+}
+
+
+void select_tracks(rnc_t *rnc, int *first, int *last)
+{
+    char *e;
+
+    if (!strcmp(rnc->rip, "all")) {
+        *first = 0;
+        *last  = rnc->ntrack - 1;
+
+        return;
+    }
+
+    *first = strtoul(rnc->rip, &e, 10);
+
+    if (*first < 1)
+        goto invalid_tracks;
+
+    if (!*e)
+        *last = *first;
+    else {
+        if (*e && *e != '-')
+            goto invalid_tracks;
+
+        *last = strtoul(e + 1, &e, 10);
+
+        if (*last < 1 || *e)
+            goto invalid_tracks;
+    }
+
+    if (*last > rnc->ntrack)
+        *last = rnc->ntrack;
+
+    *first -= 1;
+    *last  -= 1;
+
+    return;
+
+ invalid_tracks:
+    rnc_fatal(rnc, "invalid track selection: '%s'", rnc->rip);
+}
+
+
+int fetch_metadata(rnc_t *rnc)
+{
+    rnc_track_t *t;
+    rnc_meta_t  *m;
+    int          i;
+
+    rnc->db = rnc_meta_create(rnc, "tracklist");
+
+    if (rnc->db == NULL) {
+        rnc_warning(rnc, "failed to create tracklist metadata DB.");
+        return -1;
+    }
+
+    if (rnc_meta_open(rnc->db, NULL) < 0) {
+        rnc_warning(rnc, "failed to open tracklist metadata DB.");
+        return -1;
+    }
+
+    for (i = 0; i < rnc->ntrack; i++) {
+        t = rnc->tracks + i;
+
+        m = rnc_meta_lookup(rnc->db, t->id);
+
+        if (m == NULL) {
+            rnc_warning(rnc, "failed to look up metadata for track #%d", t->id);
+            continue;
+        }
+
+        printf("Track #%d: %s\n", t->id, m->title ? m->title : "unknown");
+
+        rnc_meta_free(m);
+    }
+
+    return 0;
+}
+
+
+int main(int argc, char *argv[], char *envp[])
+{
+    rnc_t *rnc;
+    rnc_track_t *t;
+    int i, first, last, rip;
+
+    rnc = rnc_init(argc, argv, envp);
+
+    printf("input:  %s\n", rnc->device);
+    printf("output: %s\n", rnc->output);
+    printf("format: %s\n", rnc->format ?  rnc->format : "flac");
+    printf("tracks: %s\n", rnc->rip ? rnc->rip : "all");
+
+    discover_tracks(rnc);
+    select_tracks(rnc, &first, &last);
+    fetch_metadata(rnc);
+
+    printf("Track Selection:\n");
+    for (i = 0; i < rnc->ntrack; i++) {
+        t   = rnc->tracks + i;
+        rip = first <= i && i <= last;
+
+        printf("    #%2.2d (%s): %d min %2.2d sec, blocks %d - %d\n", t->id,
+               rip ? "*" : "-", ((int)t->length / 60), ((int)t->length % 60),
+               t->fblk, t->fblk + t->nblk - 1);
+    }
+
+    for (i = first; i <= last; i++)
+        rip_track(rnc, i);
 
     return 0;
 }

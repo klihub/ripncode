@@ -39,24 +39,28 @@
 #include <murphy/common/mm.h>
 #include <murphy/common/list.h>
 
-typedef struct rnc_dev_api_s rnc_dev_api_t;
-typedef struct rnc_dev_s     rnc_dev_t;
-typedef struct rnc_track_s   rnc_track_t;
-typedef struct rnc_meta_s    rnc_meta_t;
-typedef struct rnc_buf_s     rnc_buf_t;
-typedef struct rnc_enc_api_s rnc_enc_api_t;
-typedef struct rnc_encoder_s rnc_encoder_t;
-typedef struct rnc_s         rnc_t;
+typedef struct rnc_dev_api_s  rnc_dev_api_t;
+typedef struct rnc_dev_s      rnc_dev_t;
+typedef struct rnc_track_s    rnc_track_t;
+typedef struct rnc_meta_s     rnc_meta_t;
+typedef struct rnc_metadb_s   rnc_metadb_t;
+typedef struct rnc_meta_api_s rnc_meta_api_t;
+typedef struct rnc_buf_s      rnc_buf_t;
+typedef struct rnc_enc_api_s  rnc_enc_api_t;
+typedef struct rnc_encoder_s  rnc_encoder_t;
+typedef struct rnc_s          rnc_t;
 
 struct rnc_s {
-    char            **formats;            /* registered compression schemes */
-    int               nformat;            /* number of registered schemes */
-    mrp_list_hook_t   devices;            /* known devices */
-    mrp_list_hook_t   encoders;           /* known encoders */
-    rnc_dev_t        *dev;                /* device to read audio from */
-    rnc_track_t      *tracks;             /* tracks on device */
-    int               ntrack;             /* number of tracks */
-    rnc_encoder_t    *enc;                /* active encoder */
+    char            **formats;           /* registered compression schemes */
+    int               nformat;           /* number of registered schemes */
+    mrp_list_hook_t   devices;           /* known devices */
+    mrp_list_hook_t   encoders;          /* known encoders */
+    mrp_list_hook_t   metadbs;           /* known metadata DBs */
+    rnc_dev_t        *dev;               /* device to read audio from */
+    rnc_track_t      *tracks;            /* tracks on device */
+    int               ntrack;            /* number of tracks */
+    rnc_encoder_t    *enc;               /* active encoder */
+    rnc_metadb_t     *db;                /* metadata DB */
 
     /* command line arguments */
     const char *argv0;                   /* our executable */

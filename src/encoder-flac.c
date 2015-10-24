@@ -30,6 +30,7 @@
 #include <errno.h>
 #include <byteswap.h>
 #include <FLAC/stream_encoder.h>
+#include <FLAC/metadata.h>
 
 #include <murphy/common/debug.h>
 #include <ripncode/ripncode.h>
@@ -167,11 +168,12 @@ int flen_open(rnc_encoder_t *enc)
 
 void flen_close(rnc_encoder_t *enc)
 {
+    flen_t *fe;
     FLAC__StreamEncoder *se;
 
     mrp_debug("closing FLAC encoder %p", enc);
 
-    if (enc == NULL || (se = enc->data) == NULL)
+    if (enc == NULL || (fe = enc->data) == NULL || (se = fe->enc) == NULL)
         return;
 
     FLAC__stream_encoder_delete(se);
@@ -181,6 +183,7 @@ void flen_close(rnc_encoder_t *enc)
 
 int flen_set_quality(rnc_encoder_t *enc, uint16_t qlty, uint16_t cmpr)
 {
+    flen_t *fe;
     FLAC__StreamEncoder *se;
 
     MRP_UNUSED(qlty);
@@ -188,10 +191,11 @@ int flen_set_quality(rnc_encoder_t *enc, uint16_t qlty, uint16_t cmpr)
 
     mrp_debug("setting FLAC quality/compression to %u/%u", qlty, cmpr);
 
-    if (enc == NULL || (se = enc->data) == NULL)
+    if (enc == NULL || (fe = enc->data) == NULL || (se = fe->enc) == NULL)
         goto invalid;
 
-    /* XXX maybe we should cmpr = (int)ceil(cmpr * 8.0 / 0xffffU); */
+
+    /* we could cmpr = (int)ceil(cmpr * 8.0 / 0xffffU)... but nah. */
 
     FLAC__stream_encoder_set_compression_level(se, 8); /* doesn't go to 11... */
 
@@ -205,21 +209,28 @@ int flen_set_quality(rnc_encoder_t *enc, uint16_t qlty, uint16_t cmpr)
 
 int flen_set_metadata(rnc_encoder_t *enc, rnc_meta_t *meta)
 {
+#define TAG(_tag, ...) do {                                                    \
+        const char *_v;                                                        \
+                                                                               \
+        n = snprintf(p, l, __VA_ARGS__);                                       \
+        if (n < 0)                                                             \
+            goto invalid;                                                      \
+        if (n + 1 >= l)                                                        \
+            goto overflow;                                                     \
+        _v = p;                                                                \
+        p += n + 1;                                                            \
+        l -= n + 1;                                                            \
+                                                                               \
+        FLAC__metadata_object_vorbiscomment_entry_from_name_value_pair(&entry, \
+                                                                       _tag,   \
+                                                                       _v);    \
+        FLAC__metadata_object_vorbiscomment_append_comment(data[0], entry, 0); \
+    } while (0)
+
     flen_t *fe;
     FLAC__StreamEncoder *se;
-    FLAC__StreamMetadata_VorbisComment_Entry comments[32], *c;
-    FLAC__StreamMetadata *metadata[1], metablk;
-#define TAG(_c, _tag, ...) do {                 \
-        _c->entry = (FLAC__byte *)p;            \
-        n = snprintf(p, l, _tag"="__VA_ARGS__); \
-        if (n < 0)                              \
-            goto invalid;                       \
-        if (n + 1 >= l)                         \
-            goto overflow;                      \
-        p += n + 1;                             \
-        l -= n + 1;                             \
-        _c->length = strlen((char *)_c->entry); \
-    } while (0)
+    FLAC__StreamMetadata_VorbisComment_Entry entry;
+    FLAC__StreamMetadata *data[3];
     char tags[16 * 1024], *p;
     int  l, n;
 
@@ -231,47 +242,66 @@ int flen_set_metadata(rnc_encoder_t *enc, rnc_meta_t *meta)
     if (fe->busy)
         goto busy;
 
+
+    data[0] = FLAC__metadata_object_new(FLAC__METADATA_TYPE_VORBIS_COMMENT);
+    data[1] = FLAC__metadata_object_new(FLAC__METADATA_TYPE_PADDING);
+    data[1]->length = 16;
+
+#if 1
+    entry.entry  = (unsigned char *)"RipNCode";
+    entry.length = 8;
+    FLAC__metadata_object_vorbiscomment_set_vendor_string(data[0], entry, true);
+#endif
+
+
     l = sizeof(tags) - 1;
     p = tags;
-    c = comments;
 
     if (meta->title) {
-        TAG(c, "TITLE", "%s", meta->title);
-        c++;
+        TAG("TITLE", "%s", meta->title);
     }
 
     if (meta->album) {
-        TAG(c, "ALBUM", "%s", meta->album);
-        c++;
+        TAG("ALBUM", "%s", meta->album);
     }
 
     if (meta->track > 0) {
-        TAG(c, "TRACKNUMBER", "%d", meta->track);
-        c++;
+        TAG("TRACKNUMBER", "%d", meta->track);
     }
 
     if (meta->artist) {
-        TAG(c, "ARTIST", "%s", meta->artist);
-        c++;
+        TAG("ARTIST", "%s", meta->artist);
     }
 
     if (meta->genre) {
-        TAG(c, "GENRE", "%s", meta->genre);
-        c++;
+        TAG("GENRE", "%s", meta->genre);
     }
 
-    /* XXX TODO: add the rest of the tags... */
+    if (meta->date.tm_year) {
+        TAG("DATE", "%d", meta->date.tm_year);
+    }
 
-    metablk.type = FLAC__METADATA_TYPE_VORBIS_COMMENT;
-    metablk.is_last = true;
-    metablk.data.vorbis_comment.vendor_string.entry  = (FLAC__byte *)"RipNCode";
-    metablk.data.vorbis_comment.vendor_string.length = 8;
-    metablk.data.vorbis_comment.num_comments = c - comments;
-    metablk.data.vorbis_comment.comments     = comments;
+    if (meta->isrc) {
+        TAG("ISRC", "%s", meta->isrc);
+    }
 
-    metadata[0] = &metablk;
+    if (meta->performer) {
+        TAG("PERFORMER", "%s", meta->performer);
+    }
 
-    if (FLAC__stream_encoder_set_metadata(se, metadata, 1))
+    if (meta->copyright) {
+        TAG("COPYRIGHT", "%s", meta->copyright);
+    }
+
+    if (meta->license) {
+        TAG("LICENSE", "%s", meta->license);
+    }
+
+    if (meta->organization) {
+        TAG("ORGANIZATION", "%s", meta->organization);
+    }
+
+    if (FLAC__stream_encoder_set_metadata(se, data, 2))
         return 0;
     else
         return -1;
@@ -285,6 +315,7 @@ int flen_set_metadata(rnc_encoder_t *enc, rnc_meta_t *meta)
  invalid:
     errno = EINVAL;
     return -1;
+#undef TAG
 }
 
 
@@ -327,7 +358,6 @@ int flen_write(rnc_encoder_t *enc, void *buf, size_t size)
     if (!FLAC__stream_encoder_process(se, samples, nsample))
         goto ioerror;
 
-
     return 0;
 
  ioerror:
@@ -344,7 +374,7 @@ int flen_finish(rnc_encoder_t *enc)
     flen_t *fe;
     FLAC__StreamEncoder *se;
 
-    mrp_debug("deinitializing FLAC encoder %p", enc);
+    mrp_debug("finalizing FLAC encoding");
 
     if (enc == NULL || (fe = enc->data) == NULL || (se = fe->enc) == NULL)
         goto invalid;

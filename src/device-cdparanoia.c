@@ -179,9 +179,10 @@ static int cdpa_get_tracks(rnc_dev_t *dev, rnc_track_t *buf, size_t size)
 
     mrp_debug("getting tracks");
 
+    base = cdio_get_first_track_num(cdpa->cdio);
+
     if (cdpa->ntrack == 0) {
         ntrack = cdio_get_num_tracks(cdpa->cdio);
-        base   = cdio_get_first_track_num(cdpa->cdio);
 
         if (ntrack == 0)
             return 0;
@@ -218,7 +219,7 @@ static int cdpa_get_tracks(rnc_dev_t *dev, rnc_track_t *buf, size_t size)
 
     for (i = 0, t = buf, trk = cdpa->tracks; i < (int)size; i++, t++, trk++) {
         t->idx    = trk - cdpa->tracks;
-        t->id     = i;
+        t->id     = base + i;
         t->fblk   = trk->fblk;
         t->nblk   = trk->lblk - trk->fblk + 1;
         t->length = 1.0 * t->nblk / 75.0;
@@ -303,7 +304,7 @@ static int cdpa_get_blocksize(rnc_dev_t *dev)
 
 static int32_t seek_track(cdpa_t *cdpa, int idx, uint32_t blk)
 {
-    int32_t offs;
+    lsn_t lsn;
 
     mrp_debug("seeking to track #%d, block %u", idx, blk);
 
@@ -313,8 +314,13 @@ static int32_t seek_track(cdpa_t *cdpa, int idx, uint32_t blk)
     if (cdpa->tracks[idx].fblk + blk > cdpa->tracks[idx].lblk)
         goto invalid;
 
-    offs = (cdpa->tracks[idx].fblk + blk) * CDIO_CD_FRAMESIZE_RAW;
-    return (int32_t)cdio_paranoia_seek(cdpa->cdpa, offs, SEEK_SET);
+    blk += cdpa->tracks[idx].fblk;
+    lsn  = (int32_t)cdio_paranoia_seek(cdpa->cdpa, blk, SEEK_SET);
+
+    if (lsn < 0)
+      goto invalid;
+
+    return (int32_t)(lsn * CDIO_CD_FRAMESIZE_RAW);
 
  invalid:
     errno = EINVAL;

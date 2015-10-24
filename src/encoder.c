@@ -80,30 +80,36 @@ int rnc_encoder_register(rnc_t *rnc, const char *name, rnc_enc_api_t *api)
 }
 
 
+static rnc_enc_api_t *api_lookup(rnc_t *rnc, const char *type)
+{
+    rnc_enc_api_t   *a;
+    mrp_list_hook_t *p, *n;
+    int              i;
+
+    mrp_list_foreach(&rnc->encoders, p, n) {
+        a = mrp_list_entry(p, typeof(*a), hook);
+
+        for (i = 0; a->types[i] != NULL; i++)
+            if (!strcmp(type, a->types[i]))
+                return a;
+    }
+
+    return NULL;
+}
+
+
 rnc_encoder_t *rnc_encoder_create(rnc_t *rnc, uint32_t format)
 {
-    rnc_encoder_t   *enc;
-    rnc_enc_api_t   *api, *a;
-    mrp_list_hook_t *p, *n;
-    const char      *type;
-    int              i;
+    rnc_encoder_t *enc;
+    rnc_enc_api_t *api;
+    const char    *type;
 
     type = rnc_compress_name(rnc, RNC_FORMAT_CMPR(format));
 
     if (type == NULL)
         goto invalid;
 
-    api = NULL;
-    mrp_list_foreach(&rnc->encoders, p, n) {
-        a = mrp_list_entry(p, typeof(*api), hook);
-
-        for (i = 0; a->types[i] != NULL; i++) {
-            if (!strcmp(type, a->types[i])) {
-                api = a;
-                break;
-            }
-        }
-    }
+    api = api_lookup(rnc, type);
 
     if (api == NULL)
         goto invalid;
@@ -132,25 +138,43 @@ rnc_encoder_t *rnc_encoder_create(rnc_t *rnc, uint32_t format)
 }
 
 
+void rnc_encoder_destroy(rnc_encoder_t *enc)
+{
+    if (enc == NULL)
+        return;
+
+    enc->api->close(enc);
+
+    mrp_free(enc);
+}
+
+
 int rnc_encoder_set_quality(rnc_encoder_t *enc, uint16_t qlty, uint16_t cmpr)
 {
     if (enc->api == NULL)
         goto invalid;
+
+    if (enc->open)
+        goto busy;
 
     return enc->api->set_quality(enc, qlty, cmpr);
 
  invalid:
     errno = EINVAL;
     return -1;
+
+ busy:
+    errno = EBUSY;
+    return -1;
 }
 
 
-int rnc_encoder_open(rnc_encoder_t *enc)
+int rnc_encoder_set_metadata(rnc_encoder_t *enc, rnc_meta_t *meta)
 {
     if (enc->api == NULL)
         goto invalid;
 
-    return enc->api->open(enc);
+    return enc->api->set_metadata(enc, meta);
 
  invalid:
     errno = EINVAL;
@@ -162,6 +186,13 @@ int rnc_encoder_write(rnc_encoder_t *enc, void *buf, size_t size)
 {
     if (enc->api == NULL)
         goto invalid;
+
+    if (!enc->open) {
+        if (enc->api->open(enc) < 0)
+            return -1;
+
+        enc->open = 1;
+    }
 
     return enc->api->write(enc, buf, size);
 
