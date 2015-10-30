@@ -169,6 +169,14 @@ static void cdpa_close(rnc_dev_t *dev)
 }
 
 
+static int cdpa_set_speed(rnc_dev_t *dev, int speed)
+{
+    cdpa_t *cdpa = dev->data;
+
+    return cdio_cddap_speed_set(cdpa->cdda, speed);
+}
+
+
 static int cdpa_get_tracks(rnc_dev_t *dev, rnc_track_t *buf, size_t size)
 {
     cdpa_t       *cdpa = dev->data;
@@ -400,6 +408,7 @@ RNC_DEVICE_REGISTER(cdio, {
         .probe         = cdpa_probe,
         .open          = cdpa_open,
         .close         = cdpa_close,
+        .set_speed     = cdpa_set_speed,
         .get_tracks    = cdpa_get_tracks,
         .get_formats   = cdpa_get_formats,
         .set_format    = cdpa_set_format,

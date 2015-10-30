@@ -50,6 +50,8 @@ struct rnc_dev_api_s {
     int (*open)(rnc_dev_t *d, const char *device);
     /* close the device */
     void (*close)(rnc_dev_t *d);
+    /* set speed */
+    int (*set_speed)(rnc_dev_t *d, int speed);
     /* get track info */
     int (*get_tracks)(rnc_dev_t *d, rnc_track_t *buf, size_t size);
     /* get supported formats */
@@ -109,6 +111,17 @@ rnc_dev_t *rnc_device_open(rnc_t *rnc, const char *device);
  * @param [in] dev  device to close
  */
 void rnc_device_close(rnc_dev_t *dev);
+
+
+/**
+ * @brief Set device speed.
+ *
+ * @param [in] dev    device to set speed for
+ * @param [in] speed  device speed to set
+ *
+ * @return Returns 0 upon success, -1 otherwise.
+ */
+int rnc_device_set_speed(rnc_dev_t *dev, int speed);
 
 /**
  * @brief Get tracklist of the device.

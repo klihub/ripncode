@@ -72,6 +72,7 @@ static void print_usage(rnc_t *rnc, int exit_code, const char *fmt, ...)
     printf("usage: %s [options] <input> [<output>]\n", base);
     printf("The possible options are:\n");
     printf("  -d, --driver=<DRIVER>        use <DRIVER> to open <input>\n"
+           "  -s, --speed=<SPEEDT>         device speed\n"
            "  -o, --output=<FORMAT>        encode to <FORMAT> in <output>\n"
            "  -t, --tracks=<FIRST[-LAST]>  ripncode given tracks\n"
            "  -m, --metadata=<FILE>        read album metadata from <FILE>\n"
@@ -93,6 +94,7 @@ static void setup_defaults(rnc_t *rnc, const char *argv0)
 {
     rnc->argv0      = argv0;
     rnc->device     = "/dev/cdrom";
+    rnc->speed      = 0;
     rnc->log_mask   = MRP_LOG_UPTO(MRP_LOG_WARNING);
     rnc->log_target = "stdout";
 
@@ -107,9 +109,10 @@ static void setup_defaults(rnc_t *rnc, const char *argv0)
 
 void rnc_cmdline_parse(rnc_t *rnc, int argc, char **argv, char **envp)
 {
-#   define OPTIONS "d:o:f:t:m:p:L:vT:D:n:h"
+#   define OPTIONS "d:s:o:f:t:m:p:L:vT:D:n:h"
     struct option options[] = {
         { "driver"           , required_argument, NULL, 'd' },
+        { "speed"            , required_argument, NULL, 's' },
         { "output"           , required_argument, NULL, 'o' },
         { "format"           , required_argument, NULL, 'f' },
         { "tracks"           , required_argument, NULL, 't' },
@@ -122,7 +125,8 @@ void rnc_cmdline_parse(rnc_t *rnc, int argc, char **argv, char **envp)
         { "help"             , no_argument      , NULL, 'h' },
         { NULL, 0, NULL, 0 },
     };
-    int            opt, help, dbg;
+    int   opt, help, dbg;
+    char *e;
 
     MRP_UNUSED(envp);
 
@@ -132,7 +136,13 @@ void rnc_cmdline_parse(rnc_t *rnc, int argc, char **argv, char **envp)
     while ((opt = getopt_long(argc, argv, OPTIONS, options, NULL)) != -1) {
         switch (opt) {
         case 'd':
-            rnc->device = optarg;
+            rnc->driver = optarg;
+            break;
+
+        case 's':
+            rnc->speed = strtoul(optarg, &e, 10);
+            if (e && *e)
+                print_usage(rnc, EINVAL, "invalid speed '%s'", optarg);
             break;
 
         case 'o':

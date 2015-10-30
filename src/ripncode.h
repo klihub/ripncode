@@ -48,6 +48,7 @@ typedef struct rnc_meta_api_s rnc_meta_api_t;
 typedef struct rnc_buf_s      rnc_buf_t;
 typedef struct rnc_enc_api_s  rnc_enc_api_t;
 typedef struct rnc_encoder_s  rnc_encoder_t;
+typedef struct rnc_gain_s     rnc_gain_t;
 typedef struct rnc_s          rnc_t;
 
 struct rnc_s {
@@ -60,11 +61,14 @@ struct rnc_s {
     rnc_track_t      *tracks;            /* tracks on device */
     int               ntrack;            /* number of tracks */
     rnc_encoder_t    *enc;               /* active encoder */
+    rnc_gain_t       *gain;              /* replaygain calculator */
     rnc_metadb_t     *db;                /* metadata DB */
 
     /* command line arguments */
     const char *argv0;                   /* our executable */
+    const char *driver;                  /* driver to use for device */
     const char *device;                  /* device to use */
+    int         speed;                   /* device speed */
     const char *rip;                     /* tracks to rip */
     const char *metadata;                /* metadata file to use */
     const char *output;                  /* output to write */
@@ -81,5 +85,6 @@ struct rnc_s {
 #include <ripncode/metadata.h>
 #include <ripncode/buffer.h>
 #include <ripncode/encoder.h>
+#include <ripncode/replaygain.h>
 
 #endif /* __RIPNCODE_H__ */

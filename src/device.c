@@ -117,6 +117,12 @@ void rnc_device_close(rnc_dev_t *dev)
 }
 
 
+int rnc_device_set_speed(rnc_dev_t *dev, int speed)
+{
+    return dev->api->set_speed(dev, speed);
+}
+
+
 int rnc_device_get_tracks(rnc_dev_t *dev, rnc_track_t *buf, size_t size)
 {
     return dev->api->get_tracks(dev, buf, size);

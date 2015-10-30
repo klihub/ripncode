@@ -50,6 +50,9 @@ struct rnc_meta_s {
     const char *copyright;               /* copyright attribution */
     const char *license;                 /* license information */
     const char *organization;            /* producing organization */
+    double      track_gain;              /* replaygain for track */
+    double      track_peak;              /* peak for track */
+    double      album_gain;              /* replaygain for album */
 };
 
 

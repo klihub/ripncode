@@ -96,6 +96,9 @@ static void discover_tracks(rnc_t *rnc)
 
     if (n != rnc->ntrack)
         rnc_fatal(rnc, "inconsistent tracks read from '%s'", rnc->device);
+
+    if (rnc->speed)
+        rnc_device_set_speed(rnc->dev, rnc->speed);
 }
 
 
@@ -106,6 +109,7 @@ int encode_track(rnc_t *rnc, rnc_track_t *t)
     int            cmpr, cmap, chnl, rate, bits, smpl, endn, fid;
     int            blksize, bufsize, n, i;
     char          *buf;
+    double         gain, peak, loud, range;
 
     if (rnc_device_seek(rnc->dev, t, 0) < 0) {
         rnc_error(rnc, "failed to seek to beginning of track #%d", t->id);
@@ -137,13 +141,18 @@ int encode_track(rnc_t *rnc, rnc_track_t *t)
 
     meta = rnc_meta_lookup(rnc->db, t->id);
 
-    if (meta != NULL) {
+    if (meta != NULL)
         rnc_encoder_set_metadata(enc, meta);
-        rnc_meta_free(meta);
+
+    if (rnc->gain == NULL) {
+        rnc->gain = rnc_gain_create(rnc->ntrack, fid);
+
+        if (rnc->gain == NULL)
+            rnc_error(&rnc, "failed to initialize replaygain calculation");
     }
 
     blksize = rnc_device_get_blocksize(rnc->dev);
-    bufsize = 32 * blksize;
+    bufsize = (256 + 128) * blksize;
     buf     = alloca(bufsize);
 
     for (i = 0; i < (int)t->nblk; i += n / blksize) {
@@ -160,8 +169,24 @@ int encode_track(rnc_t *rnc, rnc_track_t *t)
             goto fail;
         }
 
-        printf("\rtrack #%d: %d/%u", t->id, i + n / blksize, t->nblk);
+        if (rnc_gain_analyze(rnc->gain, t->idx, buf, n / (2 * 2)) < 0)
+            rnc_error(rnc, "replaygain analysis failed");
+
+        printf("\rtrack #%d: %.2f %%", t->id,
+               (100.0 * (i + n / blksize)) / t->nblk);
         fflush(stdout);
+    }
+
+    loud  = rnc_gain_track_loudness(rnc->gain, t->idx);
+    range = rnc_gain_track_range(rnc->gain, t->idx);
+    gain  = rnc_gain_track_gain(rnc->gain, t->idx);
+    peak  = rnc_gain_track_peak(rnc->gain, t->idx);
+
+    if (meta != NULL) {
+        meta->track_gain = gain;
+        meta->track_peak = peak;
+
+        rnc_encoder_set_metadata(enc, meta);
     }
 
     if (rnc_encoder_finish(enc) < 0) {
@@ -169,7 +194,11 @@ int encode_track(rnc_t *rnc, rnc_track_t *t)
         goto fail;
     }
 
-    printf("\rtrack #%d: done                 \n", t->id);
+    rnc_meta_free(meta);
+
+    printf("\rtrack #%d: done     \n", t->id);
+    printf("    loudness: %2.2f, range: %2.2f, peak: %2.2f, replaygain: %2.2f\n",
+           loud, range, peak, gain);
     fflush(stdout);
 
     rnc->enc = enc;
@@ -334,6 +363,7 @@ int main(int argc, char *argv[], char *envp[])
     rnc = rnc_init(argc, argv, envp);
 
     printf("input:  %s\n", rnc->device);
+    printf("speed:  %d\n", rnc->speed);
     printf("output: %s\n", rnc->output);
     printf("format: %s\n", rnc->format ?  rnc->format : "flac");
     printf("tracks: %s\n", rnc->rip ? rnc->rip : "all");
@@ -354,6 +384,9 @@ int main(int argc, char *argv[], char *envp[])
 
     for (i = first; i <= last; i++)
         rip_track(rnc, i);
+
+    printf("album gain: %2.2f dB\n", rnc_gain_album_gain(rnc->gain));
+
 
     return 0;
 }

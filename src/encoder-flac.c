@@ -301,6 +301,18 @@ int flen_set_metadata(rnc_encoder_t *enc, rnc_meta_t *meta)
         TAG("ORGANIZATION", "%s", meta->organization);
     }
 
+    if (meta->track_gain) {
+        TAG("REPLAYGAIN_TRACK_GAIN", "%2.2f dB", meta->track_gain);
+    }
+
+    if (meta->track_peak) {
+        TAG("REPLAYGAIN_TRACK_PEAK", "%2.2f", meta->track_peak);
+    }
+
+    if (meta->album_gain) {
+        TAG("REPLAYGAIN_ALBUM_GAIN", "%2.2f dB", meta->album_gain);
+    }
+
     if (FLAC__stream_encoder_set_metadata(se, data, 2))
         return 0;
     else

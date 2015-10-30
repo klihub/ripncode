@@ -39,6 +39,7 @@ rnc_SOURCES =			\
 	encoder-flac.c		\
 	metadata.c		\
 	metadata-tracklist.c	\
+	replaygain.c		\
 	buffer.c		\
 	rnc.c
 
@@ -46,12 +47,14 @@ rnc_CFLAGS =			\
 	$(AM_CFLAGS)		\
 	$(MURPHY_CFLAGS)	\
 	$(CDIO_CFLAGS)		\
-	$(FLAC_CFLAGS)
+	$(FLAC_CFLAGS)		\
+	$(EBUR128_CFLAGS)
 
 rnc_LDADD =			\
 	$(MURPHY_LIBS)		\
 	$(CDIO_LIBS)		\
-	$(FLAC_LIBS)
+	$(FLAC_LIBS)		\
+	$(EBUR128_LIBS)
 
 
 #########################

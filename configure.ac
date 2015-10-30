@@ -86,6 +86,20 @@ fi
 AC_SUBST(FLAC_CFLAGS)
 AC_SUBST(FLAC_LIBS)
 
+# Check for libebur128
+AC_CHECK_HEADERS(ebur128.h,
+                 [have_ebur128=yes], [have_ebur128=no])
+
+if test "$have_ebur128" = "no"; then
+  AC_MSG_ERROR([libebur128 header file ebur128.h not found.])
+fi
+
+EBUR128_CFLAGS=""
+EBUR128_LIBS="-lebur128 -lm"
+
+AC_SUBST(EBUR128_CFLAGS)
+AC_SUBST(EBUR128_LIBS)
+
 # Check for the check test framework.
 PKG_CHECK_MODULES(CHECK, check, [have_check=yes], [have_check=no])
 
