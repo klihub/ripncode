@@ -1,4 +1,8 @@
-SUBDIRS = . src
+if !SYSTEM_MURPHY
+MURPHY_SUBDIRS = murphy
+endif
+
+SUBDIRS = . $(MURPHY_SUBDIRS) src
 
 BUILT_SOURCES = ripncode-symlink
 

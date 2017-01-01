@@ -55,15 +55,26 @@ AC_SUBST(WARNING_CFLAGS)
 # Checks for library functions.
 AC_CHECK_FUNCS([strrchr strtoul])
 
-# Check for murphy-common.
-PKG_CHECK_MODULES(MURPHY, murphy-common, [have_murphy=yes], [have_murphy=no])
+# Check if we should compile/link against system-wide murphy installation.
+AC_ARG_ENABLE(system-murphy,
+              [  --enable-system-murphy  use system-wide murphy libraries],
+              [system_murphy=$enableval], [system_murphy=no])
 
-if test "$have_murphy" = "no"; then
-    AC_MSG_ERROR([Murphy common headers/libraries not found.])
+AM_CONDITIONAL(SYSTEM_MURPHY, [test "$system_murphy" = "yes"])
+
+if test "$system_murphy" = "yes"; then
+    PKG_CHECK_MODULES(SYSTEM_MURPHY, murphy-common,
+                      [have_murphy=yes], [have_murphy=no])
+
+    if test "$have_murphy" = "no"; then
+        AC_MSG_ERROR([Murphy common headers/libraries not found.])
+    fi
+
+    AC_SUBST(SYSTEM_MURPHY_CFLAGS)
+    AC_SUBST(SYSTEM_MURPHY_LIBS)
+
+    AC_CONFIG_SUBDIRS(murphy)
 fi
-
-AC_SUBST(MURPHY_CFLAGS)
-AC_SUBST(MURPHY_LIBS)
 
 # Check for libcdio.
 PKG_CHECK_MODULES(CDIO, [libcdio_paranoia libcdio_cdda],
@@ -117,3 +128,6 @@ AC_CONFIG_FILES([build-aux/shave
                 ])
 
 AC_OUTPUT
+
+echo "----- Configuration -----"
+echo "* use system-wide murphy installation: ${system_murphy:-no}"

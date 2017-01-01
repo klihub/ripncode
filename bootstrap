@@ -1,5 +1,9 @@
 #!/bin/bash
 
+pushd murphy && \
+    ./bootstrap && \
+    popd
+
 aclocal -I m4 && \
     autoheader && \
         libtoolize --copy --force && \

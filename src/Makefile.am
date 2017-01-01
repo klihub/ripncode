@@ -4,6 +4,15 @@ noinst_PROGRAMS =
 
 AM_CFLAGS = $(WARNING_CFLAGS) $(AM_CPPFLAGS) -I$(top_srcdir) -I$(top_builddir)
 
+if SYSTEM_MURPHY
+    MURPHY_CFLAGS = $(SYSTEM_MURPHY_CFLAGS)
+    MURPHY_LIBS   = $(SYSTEM_MURPHY_LIBS)
+else
+    MURPHY_DIR    = $(top_srcdir)/murphy
+    MURPHY_CFLAGS = -I$(MURPHY_DIR)
+    MURPHY_LIBS   = $(MURPHY_DIR)/src/libmurphy-common.la
+endif
+
 
 #########################
 # ripncode
@@ -74,6 +83,7 @@ buffer_test_SOURCES =		\
 
 buffer_test_CFLAGS =		\
 	$(AM_CFLAGS)		\
+	$(MURPHY_CFLAGS)	\
 	$(CHECK_CLAGS)
 
 buffer_test_LDADD =		\
@@ -93,6 +103,7 @@ seek_test_SOURCES =		\
 
 seek_test_CFLAGS =		\
 	$(AM_CFLAGS)		\
+	$(MURPHY_CFLAGS)	\
 	$(CHECK_CLAGS)
 
 seek_test_LDADD =		\
