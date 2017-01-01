@@ -1,3 +1,4 @@
 [submodule "murphy"]
 	path = murphy
 	url = git@github.com:klihub/murphy.git
+	ignore = untracked
