@@ -182,6 +182,19 @@ int rnc_encoder_set_metadata(rnc_encoder_t *enc, rnc_meta_t *meta)
 }
 
 
+int rnc_encoder_set_gain(rnc_encoder_t *enc, double t, double p, double a)
+{
+    if (enc->api == NULL)
+        goto invalid;
+
+    return enc->api->set_gain(enc, t, p, a);
+
+ invalid:
+    errno = EINVAL;
+    return -1;
+}
+
+
 int rnc_encoder_write(rnc_encoder_t *enc, void *buf, size_t size)
 {
     if (enc->api == NULL)

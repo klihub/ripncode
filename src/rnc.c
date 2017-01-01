@@ -182,12 +182,7 @@ int encode_track(rnc_t *rnc, rnc_track_t *t)
     gain  = rnc_gain_track_gain(rnc->gain, t->idx);
     peak  = rnc_gain_track_peak(rnc->gain, t->idx);
 
-    if (meta != NULL) {
-        meta->track_gain = gain;
-        meta->track_peak = peak;
-
-        rnc_encoder_set_metadata(enc, meta);
-    }
+    rnc_encoder_set_gain(enc, gain, peak, 0);
 
     if (rnc_encoder_finish(enc) < 0) {
         rnc_error(rnc, "failed to finalize encoding of track #%d", t->id);

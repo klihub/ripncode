@@ -44,6 +44,10 @@ typedef struct {
     int                  chnl;
     int                  bits;
     rnc_buf_t           *buf;
+    uint32_t             gain_offs;
+    double               track_gain;
+    double               track_peak;
+    double               album_gain;
     int                  swap : 1;
     int                  busy : 1;
 } flen_t;
@@ -242,17 +246,13 @@ int flen_set_metadata(rnc_encoder_t *enc, rnc_meta_t *meta)
     if (fe->busy)
         goto busy;
 
-
     data[0] = FLAC__metadata_object_new(FLAC__METADATA_TYPE_VORBIS_COMMENT);
     data[1] = FLAC__metadata_object_new(FLAC__METADATA_TYPE_PADDING);
     data[1]->length = 16;
 
-#if 1
     entry.entry  = (unsigned char *)"RipNCode";
     entry.length = 8;
     FLAC__metadata_object_vorbiscomment_set_vendor_string(data[0], entry, true);
-#endif
-
 
     l = sizeof(tags) - 1;
     p = tags;
@@ -301,17 +301,12 @@ int flen_set_metadata(rnc_encoder_t *enc, rnc_meta_t *meta)
         TAG("ORGANIZATION", "%s", meta->organization);
     }
 
-    if (meta->track_gain) {
-        TAG("REPLAYGAIN_TRACK_GAIN", "%2.2f dB", meta->track_gain);
-    }
+    TAG("REPLAYGAIN_TRACK_GAIN", "#TRK# dB");    /* dummy placeholder */
+    TAG("REPLAYGAIN_TRACK_PEAK", "#PK#");        /* dummy placeholder */
+    TAG("REPLAYGAIN_ALBUM_GAIN", "#ALB# dB");    /* dummy placeholder */
 
-    if (meta->track_peak) {
-        TAG("REPLAYGAIN_TRACK_PEAK", "%2.2f", meta->track_peak);
-    }
-
-    if (meta->album_gain) {
-        TAG("REPLAYGAIN_ALBUM_GAIN", "%2.2f dB", meta->album_gain);
-    }
+    if (!fe->gain_offs)
+        fe->gain_offs = rnc_buf_wseek(fe->buf, 0, SEEK_CUR);
 
     if (FLAC__stream_encoder_set_metadata(se, data, 2))
         return 0;
@@ -330,6 +325,29 @@ int flen_set_metadata(rnc_encoder_t *enc, rnc_meta_t *meta)
 #undef TAG
 }
 
+
+int flen_set_gain(rnc_encoder_t *enc, double gain, double peak, double album)
+{
+    flen_t *fe;
+    FLAC__StreamEncoder *se;
+
+    mrp_debug("updating replaygain in FLAC metadata");
+
+    if (enc == NULL || (fe = enc->data) == NULL || (se = fe->enc) == NULL)
+        goto invalid;
+
+    fe->track_gain = gain;
+    fe->track_peak = peak;
+    fe->album_gain = album;
+
+    mrp_debug("replaygain offset: %u", fe->gain_offs);
+
+    return 0;
+
+ invalid:
+    errno = EINVAL;
+    return -1;
+}
 
 int flen_write(rnc_encoder_t *enc, void *buf, size_t size)
 {
@@ -525,6 +543,8 @@ static void __flen_meta(const FLAC__StreamEncoder *se,
     MRP_UNUSED(meta);
     MRP_UNUSED(client_data);
 
+    mrp_debug("%s() called back...", __FUNCTION__);
+
     return;
 }
 
@@ -538,6 +558,7 @@ RNC_ENCODER_REGISTER(flac, {
         .close        = flen_close,
         .set_quality  = flen_set_quality,
         .set_metadata = flen_set_metadata,
+        .set_gain     = flen_set_gain,
         .write        = flen_write,
         .finish       = flen_finish,
         .set_data_cb  = flen_set_data_cb,

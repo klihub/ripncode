@@ -9,20 +9,20 @@ AM_CFLAGS = $(WARNING_CFLAGS) $(AM_CPPFLAGS) -I$(top_srcdir) -I$(top_builddir)
 # ripncode
 #
 
-bin_PROGRAMS += ripncode
-
-ripncode_SOURCES =		\
-	ripncode.c
-
-ripncode_CFLAGS =		\
-	$(AM_CFLAGS)		\
-	$(MURPHY_CFLAGS)	\
-	$(CDIO_CFLAGS)
-
-ripncode_LDADD =		\
-	$(MURPHY_LIBS)		\
-	$(CDIO_LIBS)
-
+# bin_PROGRAMS += ripncode
+#
+#ripncode_SOURCES =		\
+#	ripncode.c
+#
+#ripncode_CFLAGS =		\
+#	$(AM_CFLAGS)		\
+#	$(MURPHY_CFLAGS)	\
+#	$(CDIO_CFLAGS)
+#
+#ripncode_LDADD =		\
+#	$(MURPHY_LIBS)		\
+#	$(CDIO_LIBS)
+#
 
 #########################
 # rnc

@@ -54,6 +54,8 @@ struct rnc_enc_api_s {
     int (*set_quality)(rnc_encoder_t *enc, uint16_t qlty, uint16_t cmpr);
     /* add/set metadata */
     int (*set_metadata)(rnc_encoder_t *enc, rnc_meta_t *meta);
+    /* set replaygain */
+    int (*set_gain)(rnc_encoder_t *enc, double gain, double peak, double album);
     /* add new audio data to encode */
     int (*write)(rnc_encoder_t *enc, void *buf, size_t size);
     /* finish the encoding process */
@@ -177,6 +179,20 @@ int rnc_encoder_set_quality(rnc_encoder_t *enc, uint16_t qlty, uint16_t cmpr);
  */
 int rnc_encoder_set_metadata(rnc_encoder_t *enc, rnc_meta_t *meta);
 
+/**
+ * @brief Set replaygain for the encoded track.
+ *
+ * Set replaygain for the track being encoded.
+ *
+ * @param [in] enc    encoder to set metadata for
+ * @param [in] gain   track gain
+ * @param [in] peak   track peak
+ * @param [in] album  album gain
+ *
+ * @return Return 0 upon success, -1 otherwise.
+ */
+int rnc_encoder_set_gain(rnc_encoder_t *enc, double gain, double peak,
+                         double album);
 
 /**
  * @brief Write samples to the given encoder.
